@@ -8,6 +8,7 @@ import argparse
 import pandas as pd
 import Bio.SeqIO as SeqIO
 from Bio.Seq import Seq
+from Bio.SeqUtils import six_frame_translations
 import concurrent.futures
 
 
@@ -165,30 +166,20 @@ def get_db(species, colname, db):
     elif colname in ["n_f1", "n_f2", "ssearch_f0", "ssearch_f1", "ssearch_f2", "ssearch_f0_comp", "ssearch_f1_comp", "ssearch_f2_comp"]:
         # Get the dna sequences for the matching genes
         gene_names = list(db.values())
-        gene_dict = get_seqs_from_gene_names(species, gene_names, "fna")
-
+        gene_dict_nt = get_seqs_from_gene_names(species, gene_names, "fna")
         print("Here are the sequences for the homologs:")
-        for k, v in gene_dict.items():
+        for k, v in gene_dict_nt.items():
             print(f"{k}: {v} - length: {len(v)}")
         print("\n")
-        print("Here are the reverse complements for the same sequences:")
-        gene_dict_comp = {k: v.reverse_complement() for k, v in gene_dict.items()}
-        for k, v in gene_dict_comp.items():
-            print(f"{k}: {v} - length: {len(v)}")
-        print("\n")
-
-        # Keep right frame only
+        if "comp" in colname:
+            gene_dict_nt = {k: v.reverse_complement() for k, v in gene_dict_nt.items()}
+        # Translate in all 6 frames
         if "0" in colname:
-            gene_dict_nt = {k: v[:-3] for k, v in gene_dict.items()}
+            gene_dict = {k: v[:-3].translate(table=11) for k, v in gene_dict_nt.items()}
         elif "1" in colname:
-            gene_dict_nt = {k: v[1:-2] for k, v in gene_dict.items()}
+            gene_dict = {k: v[1:-2].translate(table=11) for k, v in gene_dict_nt.items()}
         elif "2" in colname:
-            gene_dict_nt = {k: v[2:-1] for k, v in gene_dict.items()}
-        # Translate in +/- frames
-        if "comp" not in colname:
-            gene_dict = {k: v.translate(table=11) for k, v in gene_dict_nt.items()}
-        else:
-            gene_dict = {k: v.reverse_complement().translate(table=11) for k, v in gene_dict_nt.items()}
+            gene_dict = {k: v[2:-1].translate(table=11) for k, v in gene_dict_nt.items()}
         # Write the sequences to a temporary file
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as db_file:
             for gene, seq in gene_dict.items():
@@ -497,10 +488,10 @@ if __name__ == "__main__":
     ########################################
     ################ Ssearch ###############
     ########################################
-    # Cut 302-long chunks randomly for the CDSs
+    # Cut 300-long chunks randomly for the CDSs
     print("Now that we have the homolog couples, we can evaluate the conservation for all 6 frames of the CDSs.")
-    focal_CDSs_nt = cut_chunks(focal_CDSs_nt, 302)
-    print("Here a random 302-long chunk for each CDS in a, in the +0 frame:")
+    focal_CDSs_nt = cut_chunks(focal_CDSs_nt, 300)
+    print("Here is a random 300-long chunk for each CDS in a, in the +0 frame:")
     for k, v in focal_CDSs_nt.items():
         print(f"{k}: {v} - length: {len(v)}")
     print("\n")
@@ -511,12 +502,12 @@ if __name__ == "__main__":
     print("\n")
     # Translate in the 6 frames
     print("Here are all 6 frame translations for the CDSs:")
-    focal_CDSs_f0 = {k: v[:300].translate(table=11) for k, v in focal_CDSs_nt.items()}
-    focal_CDSs_f1 = {k: v[1:301].translate(table=11) for k, v in focal_CDSs_nt.items()}
-    focal_CDSs_f2 = {k: v[2:].translate(table=11) for k, v in focal_CDSs_nt.items()}
-    focal_CDSs_f0_comp = {k: v[2:].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
-    focal_CDSs_f1_comp = {k: v[1:301].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
-    focal_CDSs_f2_comp = {k: v[:300].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
+    focal_CDSs_f0 = {k: v[:-3].translate(table=11) for k, v in focal_CDSs_nt.items()}
+    focal_CDSs_f1 = {k: v[1:-2].translate(table=11) for k, v in focal_CDSs_nt.items()}
+    focal_CDSs_f2 = {k: v[2:-1].translate(table=11) for k, v in focal_CDSs_nt.items()}
+    focal_CDSs_f0_comp = {k: v[:-3].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
+    focal_CDSs_f1_comp = {k: v[1:-2].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
+    focal_CDSs_f2_comp = {k: v[2:-1].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
     print("Frame 0:")
     for k, v in focal_CDSs_f0.items():
         print(f"{k}: {v} - length: {len(v)}")
