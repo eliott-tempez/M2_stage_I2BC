@@ -87,9 +87,11 @@ def extract_focal_CDSs(focal_species):
             focal_CDSs[record.name] = record.seq
     # Keep 1000 at most
     focal_CDSs_names = list(focal_CDSs.keys())
-    if len(focal_CDSs) > 1000:
-        focal_CDSs_names = random.sample(focal_CDSs_names, 1000)
     focal_CDSs = {k: focal_CDSs[k] for k in focal_CDSs_names}
+    print("Here are the CDSs for genome a:")
+    for k, v in focal_CDSs.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("\n")
     return focal_CDSs
 
 
@@ -164,6 +166,17 @@ def get_db(species, colname, db):
         # Get the dna sequences for the matching genes
         gene_names = list(db.values())
         gene_dict = get_seqs_from_gene_names(species, gene_names, "fna")
+
+        print("Here are the sequences for the homologs:")
+        for k, v in gene_dict.items():
+            print(f"{k}: {v} - length: {len(v)}")
+        print("\n")
+        print("Here are the reverse complements for the same sequences:")
+        gene_dict_comp = {k: v.reverse_complement() for k, v in gene_dict.items()}
+        for k, v in gene_dict_comp.items():
+            print(f"{k}: {v} - length: {len(v)}")
+        print("\n")
+
         # Keep right frame only
         if "0" in colname:
             gene_dict_nt = {k: v[:-3] for k, v in gene_dict.items()}
@@ -205,6 +218,12 @@ def run_blast(query_sequences, db_faa_file, blast_type, keep_homologs, db):
     with tempfile.NamedTemporaryFile(mode='w', delete=False) as output_file:
         output_file_path = output_file.name
 
+    print("Here is the content of the fasta file for species b against which those CDSs are run:")
+    with open(db_faa_file, "r") as f:
+        content = f.read()
+        print(content)
+    print("\n")
+
     # Run the BLAST
     try:
         output = subprocess.run([blast_type, "-query", query_file_path, "-subject", db_faa_file, "-out", output_file_path, "-outfmt", "6 qseqid sseqid qlen evalue qcovs", "-evalue", "1e-3", "-num_threads", str(NCPUS)], capture_output=True, check=True)
@@ -229,6 +248,8 @@ def run_blast(query_sequences, db_faa_file, blast_type, keep_homologs, db):
         result = result[result.apply(lambda row: db.get(row ["qseqid"]) == row ["sseqid"], axis=1)]
     # Keep only the best hit for each query
     result = result.sort_values("evalue").drop_duplicates("qseqid")
+    print("Here is the result of the BLAST:")
+    print(result)
     # Keep homolog sequences
     if keep_homologs:
         homologs = {row["qseqid"]: row["sseqid"] for i, row in result.iterrows()}
@@ -263,7 +284,7 @@ def process_conservation_for_species(species, focal_sp, conservation_df, colname
 
     # run blast
     nb_matches, homologs = run_blast(query_sequences, db_fasta_file, blast_type, keep_homologs, db_sp)
-    print(f"Species {species}: {nb_matches} matches")
+    print(f"#Species {species}: {nb_matches} matches\n")
     conservation_df.loc[species, colname] = nb_matches
     
     # Delete db file if it was created
@@ -297,7 +318,7 @@ def process_conservation_parallel(focal_sp, conservation_df, colname, query_sequ
 def ssearch_for_species(species, focal_sp, conservation_df, colname, query_sequences, homologs):
     """Run ssearch for each cds for the focal species"""
     if species == focal_sp:
-        print(f"Species {species}: {nb_matches} matches")
+        print(f"#Species {species}: {len(query_sequences)} matches")
         conservation_df.loc[species, colname] = len(query_sequences)
         return conservation_df
 
@@ -305,6 +326,8 @@ def ssearch_for_species(species, focal_sp, conservation_df, colname, query_seque
     db = get_db(species, colname, homologs)
     for query_gene in homologs:
         db_gene = homologs[query_gene]
+        print(f"Query gene: {query_gene} - Homolog: {db_gene}")
+        print(f"Query sequence: {query_sequences[query_gene]}")
 
         # Write temporary files for the query and the homolog
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as query_file:
@@ -321,6 +344,7 @@ def ssearch_for_species(species, focal_sp, conservation_df, colname, query_seque
         # Write temporary file for the output
         with tempfile.NamedTemporaryFile(mode='w', delete=False) as output_file:
             output_file_path = output_file.name
+        print(f"Homolog sequence: {str(db_seq)}")
 
         # Run ssearch
         try:
@@ -329,6 +353,12 @@ def ssearch_for_species(species, focal_sp, conservation_df, colname, query_seque
             print(f"Water command failed with return code {e.returncode}: {e.stderr.decode()}")
             raise
         
+        print("Here is the content of the output file:")
+        with open(output_file_path, "r") as f:
+            content = f.read()
+            print(content)
+        print("\n")
+
         # Check the file isn't blank
         with open(output_file_path, "r") as f:
             content = f.read().strip()
@@ -338,6 +368,7 @@ def ssearch_for_species(species, focal_sp, conservation_df, colname, query_seque
             os.remove(output_file_path)
             continue
 
+
         # If it isn't, then we have a match
         nb_matches += 1
         # Remove the temporary files
@@ -345,7 +376,7 @@ def ssearch_for_species(species, focal_sp, conservation_df, colname, query_seque
         os.remove(db_file_path)
         os.remove(output_file_path)
 
-    print(f"Species {species}: {nb_matches} matches")
+    print(f"#Species {species}: {nb_matches} matches")
     conservation_df.loc[species, colname] = nb_matches
     return conservation_df
 
@@ -375,18 +406,22 @@ if __name__ == "__main__":
     FOCAL_SPECIES = args.focal_species
 
     # Read the list of genomes
-    with open(GENOMES_LIST, "r") as f:
+    """with open(GENOMES_LIST, "r") as f:
         genomes = f.readline().split()
-    genomes = [re.sub('"', '', g) for g in genomes]
+    genomes = [re.sub('"', '', g) for g in genomes]"""
+    genomes = ["a", "b"]
     # Initiate the dataframe
     conservation_df = initialise_conservation_df(genomes)
     print("\n")
+
+    print("This is a test run to check the code works properly.")
+    print("The code is run on 2 species only: a and b. The focal species will be a. The lines starting with # are the original output lines fot the program.\n")
 
 
     ########################################
     ############### De novo ################
     ########################################
-    print("Calculating de novo conservation...")
+    """print("Calculating de novo conservation...")
     # Extract the name of all de novo genes of the focal species
     de_novo_genes = extract_de_novo(FOCAL_SPECIES)
     if de_novo_genes == []:
@@ -398,21 +433,27 @@ if __name__ == "__main__":
         print(f"Extracted {len(de_novo_seqs)} de novo genes for the focal species {FOCAL_SPECIES}\n")
         # Calculate the de novo conservation and add to dataframe
         conservation_df, _ = process_conservation_parallel(FOCAL_SPECIES, conservation_df, "n_denovo", de_novo_seqs)
-    print("\n\n")
+    print("\n\n")"""
 
 
 
     ########################################
     ################# CDSs #################
     ########################################
-    print("Calculating CDS conservation...")
+    print("#Calculating CDS conservation...")
     # Extract 1000 CDss of the focal species
     focal_CDSs_nt = extract_focal_CDSs(FOCAL_SPECIES)
-    print(f"Extracted {len(focal_CDSs_nt)} CDSs for the focal species {FOCAL_SPECIES}\n")
+    print(f"#Extracted {len(focal_CDSs_nt)} CDSs for the focal species {FOCAL_SPECIES}\n")
     # Translate the CDSs
     focal_CDSs = {k: v.translate(table=11) for k, v in focal_CDSs_nt.items()}
+    print(f"Here are the translated CDSs:")
+    for k, v in focal_CDSs.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("\n")
     # Calculate the CDS conservation and add to dataframe + keep homolog sequences
     conservation_df, homologs = process_conservation_parallel(FOCAL_SPECIES, conservation_df, "n_cds", focal_CDSs)
+    print("Here is the dictionnary of homologs:")
+    print(homologs)
     print("\n\n")
 
 
@@ -420,7 +461,7 @@ if __name__ == "__main__":
     ########################################
     ################# TRGs #################
     ########################################
-    print("Calculating TRG conservation...")
+    """print("Calculating TRG conservation...")
     # Extract the name of 1000 (at most) TRGs of the focal species
     focal_TRG_genes = extract_focal_TRGs(FOCAL_SPECIES, TRG_RANK)
     # Get the protein sequences for each TRG
@@ -428,14 +469,14 @@ if __name__ == "__main__":
     print(f"Extracted {len(focal_TRGs)} TRGs for the focal species {FOCAL_SPECIES}\n")
     # Calculate the TRG conservation and add to dataframe
     conservation_df, _ = process_conservation_parallel(FOCAL_SPECIES, conservation_df, "n_trg", focal_TRGs)
-    print("\n\n")
+    print("\n\n")"""
 
 
 
     ########################################
     ############## Intergenic ##############
     ########################################
-    print("Calculating intergenic conservation...")
+    """print("Calculating intergenic conservation...")
     # Extract 1000 intergenic 100 sequences of the focal species
     focal_intergenic_nt = extract_intergenic(FOCAL_SPECIES)
     # Keep only the intergenic sequences of at least 100 nt and cut chunks
@@ -449,7 +490,7 @@ if __name__ == "__main__":
     print(f"Extracted {len(focal_intergenic)} intergenic sequences for the focal species {FOCAL_SPECIES}\n")
     # Calculate the intergenic conservation and add to dataframe
     conservation_df, _ = process_conservation_parallel(FOCAL_SPECIES, conservation_df, "n_intergenic", focal_intergenic)
-    print("\n\n")
+    print("\n\n")"""
 
 
 
@@ -457,28 +498,58 @@ if __name__ == "__main__":
     ################ Ssearch ###############
     ########################################
     # Cut 302-long chunks randomly for the CDSs
+    print("Now that we have the homolog couples, we can evaluate the conservation for all 6 frames of the CDSs.")
     focal_CDSs_nt = cut_chunks(focal_CDSs_nt, 302)
+    print("Here a random 302-long chunk for each CDS in a, in the +0 frame:")
+    for k, v in focal_CDSs_nt.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("\n")
     focal_CDSs_nt_comp = {k: v.reverse_complement() for k, v in focal_CDSs_nt.items()}
+    print("Here is the reverse complements for the same chunks:")
+    for k, v in focal_CDSs_nt_comp.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("\n")
     # Translate in the 6 frames
+    print("Here are all 6 frame translations for the CDSs:")
     focal_CDSs_f0 = {k: v[:300].translate(table=11) for k, v in focal_CDSs_nt.items()}
     focal_CDSs_f1 = {k: v[1:301].translate(table=11) for k, v in focal_CDSs_nt.items()}
     focal_CDSs_f2 = {k: v[2:].translate(table=11) for k, v in focal_CDSs_nt.items()}
     focal_CDSs_f0_comp = {k: v[2:].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
     focal_CDSs_f1_comp = {k: v[1:301].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
     focal_CDSs_f2_comp = {k: v[:300].translate(table=11) for k, v in focal_CDSs_nt_comp.items()}
+    print("Frame 0:")
+    for k, v in focal_CDSs_f0.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("Frame 1:")
+    for k, v in focal_CDSs_f1.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("Frame 2:")
+    for k, v in focal_CDSs_f2.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("Frame -0:")
+    for k, v in focal_CDSs_f0_comp.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("Frame -1:")
+    for k, v in focal_CDSs_f1_comp.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("Frame -2:")
+    for k, v in focal_CDSs_f2_comp.items():
+        print(f"{k}: {v} - length: {len(v)}")
+    print("\n")
+
     # Run ssearch for the 6 frames
-    print(f"Running ssearch for all 6 frames of the {len(focal_CDSs_nt)} CDSs...\n")
-    print("Frame 0...")
+    print(f"#Running ssearch for all 6 frames of the {len(focal_CDSs_nt)} CDSs...\n")
+    print("#Frame 0...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f0", focal_CDSs_f0, homologs)
-    print("\nFrame 1...")
+    print("\n#Frame 1...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f1", focal_CDSs_f1, homologs)
-    print("\nFrame 2...")
+    print("\n#Frame 2...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f2", focal_CDSs_f2, homologs)
-    print("\nFrame -0...")
+    print("\n#Frame -0...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f0_comp", focal_CDSs_f0_comp, homologs)
-    print("\nFrame -1...")
+    print("\n#Frame -1...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f1_comp", focal_CDSs_f1_comp, homologs)
-    print("\nFrame -2...")
+    print("\n#Frame -2...")
     conservation_df = run_ssearch_parallel(FOCAL_SPECIES, conservation_df, "ssearch_f2_comp", focal_CDSs_f2_comp, homologs)
     print("\n\n")
 
@@ -519,5 +590,5 @@ if __name__ == "__main__":
 
 
     # Write result to file
-    conservation_df.to_csv(os.path.join(OUTPUT_DIR, f"conservation_df_{FOCAL_SPECIES}.tsv"), sep="\t")
+    """conservation_df.to_csv(os.path.join(OUTPUT_DIR, f"conservation_df_{FOCAL_SPECIES}.tsv"), sep="\t")"""
 
