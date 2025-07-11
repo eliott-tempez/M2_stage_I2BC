@@ -222,7 +222,7 @@ ggplot(species_in_cluster_nb, aes(x = n_species_denovo, y = coverage)) +
 
 
 
-## Clusters non orfan
+############# Clusters non orfan #############
 # Get the clusters with more than one denovo
 clusters_non_orphan <- cluster_df %>%
   group_by(cluster) %>%
@@ -239,6 +239,11 @@ clusters_non_orphan_lcas_coords <- cluster_lcas_coords %>%
   filter(cluster %in% clusters_non_orphan$cluster) %>%
   select(lca_node, x, y)
 
+genomes_in_clusters <- data.frame(matrix(NA, nrow = 0, ncol = 3))
+colnames(genomes_in_clusters) <- c("cluster", "genome", "has_denovo")
+
+
+### Individual trees ###
 # For each cluster, plot the tree
 for (i in seq_len(nrow(clusters_non_orphan))) {
   cluster <- clusters_non_orphan[i, "cluster"][[1]]
@@ -289,6 +294,25 @@ for (i in seq_len(nrow(clusters_non_orphan))) {
     na.value = "white"
   )
 
-  ggsave(paste0(output_dir, "clusters/tree_", i, ".png"), plot = p)
+  #ggsave(paste0(output_dir, "clusters/tree_", i, ".png"), plot = p)
 
+
+
+  ### Analyse conservation for species under lca with no de novo ###
+  genomes_under_lca <- unlist(tree_data[tree_data$node %in% Descendants(tree, lca_node, type = "tips")[[1]], "label"])
+  genomes_with_denovo <- unlist(tree_data[tree_data$label %in% genomes, "label"])
+  for (focal_genome in genomes_under_lca) {
+    has_de_novo <- focal_genome %in% genomes_with_denovo
+    if (has_de_novo) {
+      denovo_name <- denovo[which(genomes == focal_genome)]
+      has_de_novo <- denovo_name
+    }
+    genomes_in_clusters <- rbind(genomes_in_clusters,
+                                 data.frame(cluster = cluster,
+                                            genome = focal_genome,
+                                            has_denovo = has_de_novo))
+  }
 }
+# Export info about the genomes present in each cluster
+write.table(genomes_in_clusters, file = paste0(output_dir, "genomes_in_clusters.tsv"),
+            sep = "\t", row.names = FALSE, quote = FALSE)
