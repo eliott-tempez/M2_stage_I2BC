@@ -316,3 +316,10 @@ for (i in seq_len(nrow(clusters_non_orphan))) {
 # Export info about the genomes present in each cluster
 write.table(genomes_in_clusters, file = paste0(output_dir, "genomes_in_clusters.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
+
+# In order to get the conservation results, execute the analyse_non_orfan_clusters.py script
+
+
+
+### Individual trees with conservation results ###
+# Read the conservation results
