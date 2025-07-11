@@ -37,7 +37,6 @@ if __name__ == "__main__":
                 clusters[cluster_name] = []
             clusters[cluster_name].append(gene_name)
 
-
     ####### Orfans ######
     orfans = {"true": [], "false": []}
     for cluster in clusters:
