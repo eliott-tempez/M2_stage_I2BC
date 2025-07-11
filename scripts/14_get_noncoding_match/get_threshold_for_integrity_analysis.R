@@ -65,10 +65,26 @@ if (extract_qcovs) {
 }
 
 
-ggplot(qcovs, aes(x = V1)) +
+p <- ggplot(qcovs, aes(x = V1)) +
   geom_histogram(fill = "#8d8dd8", color = "black") +
   labs(title = "Distribution of qcovs for orthologs (n = 10000)",
-       x = "qcov", y = "Count") +
+       x = "query coverage (%)", y = "Count") +
   theme_minimal()
+
+# Calculate and print deciles
+deciles <- quantile(qcovs$V1, probs = seq(0, 1, 0.1))
+print(paste0("70% of qcovs are over ", deciles[4]))
+print(paste0("80% of qcovs are over ", deciles[3]))
+print(paste0("90% of qcovs are over ", deciles[2]))
+
+# Add them to plot
+p <- p + geom_vline(xintercept = deciles[4], linetype = "dashed", color = "red") +
+  geom_vline(xintercept = deciles[3], linetype = "dashed", color = "orange") +
+  geom_vline(xintercept = deciles[2], linetype = "dashed", color = "green") +
+  annotate("text", x = deciles[4] + 5, y = 3800, label = paste0("70%\n(qcov\n", round(deciles[4], 2), "%)"), color = "red") +
+  annotate("text", x = deciles[3] + 5, y = 3800, label = paste0("80%\n(qcov\n", round(deciles[3], 2), "%)"), color = "orange") +
+  annotate("text", x = deciles[2] + 5, y = 3800, label = paste0("90%\n(qcov\n", round(deciles[2], 2), "%)"), color = "green")
+
+print(p)
 ggsave(paste0(output_dir, "qcovs_orthologs_histogram.png"))
 
