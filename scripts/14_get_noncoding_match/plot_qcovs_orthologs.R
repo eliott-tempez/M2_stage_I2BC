@@ -1,3 +1,5 @@
+# Plot the qcov distributions for 1000 random orthologs
+
 library(yaml)
 library(ggplot2)
 
