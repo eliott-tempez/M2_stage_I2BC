@@ -128,9 +128,11 @@ if __name__ == "__main__":
 
 
     # Plot the results
+    # Get bins in common
+    bins = [i for i in range(0, 101, 2)]
     # Create histogram
-    plt.hist(qcovs_iorfs, bins=30, color='purple', alpha=0.7, label='iORFs')
-    plt.hist(qcovs_cdss, bins=30, color='orange', alpha=0.7, label='CDSs')
+    plt.hist(qcovs_iorfs, bins=bins, color='purple', alpha=0.7, label='iORFs')
+    plt.hist(qcovs_cdss, bins=bins, color='orange', alpha=0.7, label='CDSs')
     # Add labels and legend
     plt.xlabel('Query Coverage (%)')
     plt.ylabel('Frequency')
